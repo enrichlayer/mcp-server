@@ -1,0 +1,67 @@
+{
+  "manifest_version": "0.3",
+  "name": "enrich-layer",
+  "display_name": "Enrich Layer",
+  "version": "0.2.0",
+  "description": "Data enrichment from professional networks — company profiles, person data, work emails, contacts, job listings, and more.",
+  "long_description": "Enrich Layer provides 25 tools for enriching company and person data from professional networks. Get company profiles, find employees, look up work emails, search for people and companies, and more — all directly from Claude.",
+  "author": {
+    "name": "Enrich Layer",
+    "email": "support@enrichlayer.com",
+    "url": "https://enrichlayer.com?utm_source=mcp&utm_medium=integration&utm_campaign=homepage"
+  },
+  "server": {
+    "type": "nodejs",
+    "entry_point": "build/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/build/index.js"],
+      "env": {
+        "ENRICH_LAYER_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "enrich_company_profile", "description": "Get structured company data from a professional network URL" },
+    { "name": "enrich_company_lookup", "description": "Look up a company by name or domain" },
+    { "name": "enrich_company_id_lookup", "description": "Look up a company by numeric ID" },
+    { "name": "enrich_company_picture", "description": "Get company profile picture URL" },
+    { "name": "enrich_employee_list", "description": "List employees of a company" },
+    { "name": "enrich_employee_count", "description": "Get employee count at a company" },
+    { "name": "enrich_employee_search", "description": "Search employees by keyword at a company" },
+    { "name": "enrich_person_profile", "description": "Get structured person data from a profile URL" },
+    { "name": "enrich_person_lookup", "description": "Look up a person by name and company" },
+    { "name": "enrich_person_picture", "description": "Get person profile picture URL" },
+    { "name": "enrich_role_lookup", "description": "Find a person by role at a company" },
+    { "name": "enrich_reverse_email", "description": "Find profile by email address" },
+    { "name": "enrich_reverse_phone", "description": "Find profile by phone number" },
+    { "name": "enrich_work_email", "description": "Get work email from a profile URL" },
+    { "name": "enrich_personal_contact", "description": "Get personal phone numbers" },
+    { "name": "enrich_personal_email", "description": "Get personal email addresses" },
+    { "name": "enrich_disposable_email", "description": "Check if email is from a disposable provider" },
+    { "name": "enrich_school_profile", "description": "Get structured school data" },
+    { "name": "enrich_student_list", "description": "List students of a school" },
+    { "name": "enrich_job_profile", "description": "Get structured job posting data" },
+    { "name": "enrich_job_search", "description": "Search job postings by criteria" },
+    { "name": "enrich_job_count", "description": "Count matching job postings" },
+    { "name": "enrich_company_search", "description": "Search companies by criteria" },
+    { "name": "enrich_person_search", "description": "Search people by criteria" },
+    { "name": "enrich_credit_balance", "description": "Check your API credit balance" }
+  ],
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Enrich Layer API Key",
+      "description": "Your API key from enrichlayer.com/dashboard?utm_source=mcp&utm_medium=integration&utm_campaign=dashboard",
+      "required": true
+    }
+  },
+  "keywords": ["enrichment", "company", "person", "email", "professional-network", "data"],
+  "license": "MIT",
+  "privacy_policies": ["https://enrichlayer.com/privacy"],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

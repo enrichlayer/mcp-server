@@ -1,0 +1,53 @@
+{
+  "name": "@verticalint-michael/enrich-layer-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for Enrich Layer API — 25 tools for company, person, contact, school, job, and search enrichment",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "enrich-layer-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "start:http": "node build/http-server.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "enrich-layer",
+    "enrichment",
+    "company-data",
+    "person-data",
+    "ai-tools"
+  ],
+  "author": "Michael Salzinger",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enrichlayer/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/enrichlayer/mcp-server/issues"
+  },
+  "homepage": "https://github.com/enrichlayer/mcp-server#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "express": "^4.21.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build",
+    "manifest.json",
+    "README.md",
+    "LICENSE"
+  ]
+}
