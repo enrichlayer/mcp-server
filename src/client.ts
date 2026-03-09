@@ -1,3 +1,5 @@
+import { getCurrentApiKey } from "./auth/context.js";
+
 const BASE_URL = "https://enrichlayer.com";
 const TIMEOUT_MS = 30_000;
 
@@ -5,7 +7,7 @@ export async function makeRequest(
   path: string,
   params: Record<string, string | undefined>,
 ): Promise<unknown> {
-  const apiKey = process.env.ENRICH_LAYER_API_KEY;
+  const apiKey = getCurrentApiKey() || process.env.ENRICH_LAYER_API_KEY;
   if (!apiKey) {
     throw new Error(
       "ENRICH_LAYER_API_KEY environment variable is not set. " +
