@@ -1,5 +1,5 @@
 {
-  "name": "@verticalint-michael/enrich-layer-mcp",
+  "name": "@enrichlayer/mcp-server",
   "version": "0.2.0",
   "description": "MCP server for Enrich Layer API — 25 tools for company, person, contact, school, job, and search enrichment",
   "type": "module",

@@ -7,7 +7,7 @@ Use it with any MCP-compatible client: Claude Desktop, Claude Code, Cursor, VS C
 ## Quick Start
 
 ```bash
-npx -y @verticalint-michael/enrich-layer-mcp
+npx -y @enrichlayer/mcp-server
 ```
 
 Set your API key as an environment variable:
@@ -29,7 +29,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "enrich-layer": {
       "command": "npx",
-      "args": ["-y", "@verticalint-michael/enrich-layer-mcp"],
+      "args": ["-y", "@enrichlayer/mcp-server"],
       "env": {
         "ENRICH_LAYER_API_KEY": "your_api_key_here"
       }
@@ -45,7 +45,7 @@ Download the `.mcpb` file from [Releases](https://github.com/enrichlayer/mcp-ser
 ### Claude Code
 
 ```bash
-claude mcp add enrich-layer -- npx -y @verticalint-michael/enrich-layer-mcp
+claude mcp add enrich-layer -- npx -y @enrichlayer/mcp-server
 ```
 
 Then set the env var `ENRICH_LAYER_API_KEY` in your shell.
@@ -59,7 +59,7 @@ Add to your Cursor MCP settings:
   "mcpServers": {
     "enrich-layer": {
       "command": "npx",
-      "args": ["-y", "@verticalint-michael/enrich-layer-mcp"],
+      "args": ["-y", "@enrichlayer/mcp-server"],
       "env": {
         "ENRICH_LAYER_API_KEY": "your_api_key_here"
       }
@@ -77,7 +77,7 @@ Add to your VS Code MCP settings (`.vscode/mcp.json`):
   "servers": {
     "enrich-layer": {
       "command": "npx",
-      "args": ["-y", "@verticalint-michael/enrich-layer-mcp"],
+      "args": ["-y", "@enrichlayer/mcp-server"],
       "env": {
         "ENRICH_LAYER_API_KEY": "your_api_key_here"
       }
