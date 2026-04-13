@@ -1,0 +1,11 @@
+src/
+node_modules/
+*.tgz
+.DS_Store
+Thumbs.db
+.env
+.env.*
+tsconfig.json
+.git/
+.claude/
+icon.png
