@@ -6,7 +6,7 @@ export function register(server: McpServer) {
   // 23. Search Companies
   server.tool(
     "enrich_company_search",
-    "Search for companies by various criteria including location, industry, size, funding, and more. Returns professional network URLs. Cost: 3 credits per URL returned.",
+    "Search for companies by various criteria including location, industry, size, funding, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
     {
       country: z.string().optional().describe("ISO3166 country code, e.g. US"),
       region: z.string().optional().describe("State, province, or region (Boolean search), e.g. Maryland OR 'New York'"),
@@ -29,6 +29,7 @@ export function register(server: McpServer) {
       funding_raised_after: z.string().optional().describe("Funding raised after this date (YYYY-MM-DD), e.g. 2019-12-30"),
       funding_raised_before: z.string().optional().describe("Funding raised before this date (YYYY-MM-DD), e.g. 2019-12-30"),
       page_size: z.string().optional().describe("Max results per call (1-100, or 1-10 if enriched), e.g. 10"),
+      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size and enrich_profiles still apply."),
       enrich_profiles: z.enum(["skip", "enrich"]).optional().describe("Return complete profile data."),
       use_cache: z.enum(["if-present", "if-recent"]).optional().describe("Cache freshness guarantee."),
     },
@@ -42,7 +43,7 @@ export function register(server: McpServer) {
   // 24. Search People
   server.tool(
     "enrich_person_search",
-    "Search for people by various criteria including name, location, education, role, company, and more. Returns professional network URLs. Cost: 3 credits per URL returned.",
+    "Search for people by various criteria including name, location, education, role, company, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
     {
       country: z.string().describe("ISO3166 country code (required), e.g. US"),
       first_name: z.string().optional().describe("First name (Boolean search), e.g. Bill OR Mark"),
@@ -70,6 +71,8 @@ export function register(server: McpServer) {
       industries: z.string().optional().describe("Inferred industry (Boolean search)."),
       interests: z.string().optional().describe("Interests (Boolean search)."),
       skills: z.string().optional().describe("Skills (Boolean search)."),
+      page_size: z.string().optional().describe("Max results per call (1-100), e.g. 10"),
+      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size still applies. country must still be provided but is ignored."),
     },
     { title: "Search People", readOnlyHint: true, openWorldHint: true },
     async (params) => {
