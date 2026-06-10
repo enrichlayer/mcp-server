@@ -29,7 +29,7 @@ export function register(server: McpServer) {
       funding_raised_after: z.string().optional().describe("Funding raised after this date (YYYY-MM-DD), e.g. 2019-12-30"),
       funding_raised_before: z.string().optional().describe("Funding raised before this date (YYYY-MM-DD), e.g. 2019-12-30"),
       page_size: z.string().optional().describe("Max results per call (1-100, or 1-10 if enriched), e.g. 10"),
-      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the filter params are ignored (they are encoded in the token)."),
+      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size and enrich_profiles still apply."),
       enrich_profiles: z.enum(["skip", "enrich"]).optional().describe("Return complete profile data."),
       use_cache: z.enum(["if-present", "if-recent"]).optional().describe("Cache freshness guarantee."),
     },
@@ -71,7 +71,8 @@ export function register(server: McpServer) {
       industries: z.string().optional().describe("Inferred industry (Boolean search)."),
       interests: z.string().optional().describe("Interests (Boolean search)."),
       skills: z.string().optional().describe("Skills (Boolean search)."),
-      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the filter params are ignored (they are encoded in the token)."),
+      page_size: z.string().optional().describe("Max results per call (1-100, or 1-10 if enriched), e.g. 10"),
+      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size still applies. country must still be provided but is ignored."),
     },
     { title: "Search People", readOnlyHint: true, openWorldHint: true },
     async (params) => {
