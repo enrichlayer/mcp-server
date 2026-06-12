@@ -1,9 +1,12 @@
+import { createRequire } from "node:module";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { createServer } from "./server.js";
 import { authContext } from "./auth/context.js";
 import { getApiKey, verifyAccessToken } from "./auth/verifier.js";
+
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 const AUTH_BASE_URL = process.env.AUTH_BASE_URL || "http://localhost:3001";
 const MCP_BASE_URL = process.env.MCP_BASE_URL || "http://localhost:3000";
@@ -55,7 +58,7 @@ app.post(
 );
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "enrich-layer-mcp", version: "0.2.0" });
+  res.json({ status: "ok", server: "enrich-layer-mcp", version });
 });
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
