@@ -1,13 +1,15 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { makeRequest } from "../client.js";
+import { ToolDef } from "./registry.js";
 
-export function register(server: McpServer) {
+export const toolDefs: ToolDef[] = [
   // 23. Search Companies
-  server.tool(
-    "enrich_company_search",
-    "Search for companies by various criteria including location, industry, size, funding, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
-    {
+  {
+    name: "enrich_company_search",
+    title: "Search Companies",
+    description:
+      "Search for companies by various criteria including location, industry, size, funding, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
+    path: "/api/v2/search/company",
+    schema: {
       country: z.string().optional().describe("ISO3166 country code, e.g. US"),
       region: z.string().optional().describe("State, province, or region (Boolean search), e.g. Maryland OR 'New York'"),
       city: z.string().optional().describe("City name (Boolean search), e.g. 'Los Angeles'"),
@@ -33,19 +35,17 @@ export function register(server: McpServer) {
       enrich_profiles: z.enum(["skip", "enrich"]).optional().describe("Return complete profile data."),
       use_cache: z.enum(["if-present", "if-recent"]).optional().describe("Cache freshness guarantee."),
     },
-    { title: "Search Companies", readOnlyHint: true, openWorldHint: true },
-    async (params) => {
-      const result = await makeRequest("/api/v2/search/company", params);
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    },
-  );
+  },
 
   // 24. Search People
-  server.tool(
-    "enrich_person_search",
-    "Search for people by various criteria including name, location, education, role, company, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
-    {
-      country: z.string().describe("ISO3166 country code (required), e.g. US"),
+  {
+    name: "enrich_person_search",
+    title: "Search People",
+    description:
+      "Search for people by various criteria including name, location, education, role, company, and more. Returns professional network URLs. Cost: 3 credits per URL returned. Returns up to page_size results (max 100) per call. If more matches exist, the response includes total_result_count and a next_page URL — pass its next_token back in to page through the full set.",
+    path: "/api/v2/search/person",
+    schema: {
+      country: z.string().optional().describe("ISO3166 country code, e.g. US"),
       first_name: z.string().optional().describe("First name (Boolean search), e.g. Bill OR Mark"),
       last_name: z.string().optional().describe("Last name (Boolean search), e.g. Gates or Zuckerberg"),
       education_field_of_study: z.string().optional().describe("Field of study (Boolean search), e.g. computer science"),
@@ -72,12 +72,7 @@ export function register(server: McpServer) {
       interests: z.string().optional().describe("Interests (Boolean search)."),
       skills: z.string().optional().describe("Skills (Boolean search)."),
       page_size: z.string().optional().describe("Max results per call (1-100), e.g. 10"),
-      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size still applies. country must still be provided but is ignored."),
+      next_token: z.string().optional().describe("Pagination cursor for the next page. Omit for the first page. Take the value from the next_token query param inside the previous response's next_page URL. When set, the search filter params are ignored (they are encoded in the token); page_size still applies."),
     },
-    { title: "Search People", readOnlyHint: true, openWorldHint: true },
-    async (params) => {
-      const result = await makeRequest("/api/v2/search/person", params);
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    },
-  );
-}
+  },
+];

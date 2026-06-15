@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "enrich-layer",
   "display_name": "Enrich Layer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Data enrichment from professional networks — company profiles, person data, work emails, contacts, job listings, and more.",
   "long_description": "Enrich Layer provides 25 tools for enriching company and person data from professional networks. Get company profiles, find employees, look up work emails, search for people and companies, and more — all directly from Claude.",
   "author": {

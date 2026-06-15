@@ -1,16 +1,12 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { makeRequest } from "../client.js";
+import { ToolDef } from "./registry.js";
 
-export function register(server: McpServer) {
+export const toolDefs: ToolDef[] = [
   // 25. Get Credit Balance
-  server.tool(
-    "enrich_credit_balance",
-    "View your current Enrich Layer credit balance. Cost: 0 credits.",
-    {},
-    { title: "Check Credit Balance", readOnlyHint: true, openWorldHint: true },
-    async () => {
-      const result = await makeRequest("/api/v2/credit-balance", {});
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    },
-  );
-}
+  {
+    name: "enrich_credit_balance",
+    title: "Check Credit Balance",
+    description: "View your current Enrich Layer credit balance. Cost: 0 credits.",
+    path: "/api/v2/credit-balance",
+    schema: {},
+  },
+];
