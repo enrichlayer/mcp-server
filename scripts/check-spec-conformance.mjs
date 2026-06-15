@@ -22,6 +22,10 @@ try {
 }
 
 const spec = parse(await readFile(SPEC_PATH, "utf8"));
+if (!spec || typeof spec.paths !== "object" || spec.paths === null) {
+  console.error(`${SPEC_PATH} has no 'paths' object — spec missing or malformed. Run \`npm run update-spec\`.`);
+  process.exit(1);
+}
 const { failures, warnings } = evaluate(spec.paths, allToolDefs);
 
 console.log(`Checked ${allToolDefs.length} tools against ${SPEC_PATH}`);

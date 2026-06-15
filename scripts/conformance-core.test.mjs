@@ -21,6 +21,15 @@ const specPaths = {
   "/api/v2/listing/": {
     get: { parameters: [{ name: "id", in: "query", required: true }] },
   },
+  // path-item-level param (shared across methods) + an operation-level one
+  "/api/v2/shared": {
+    parameters: [{ name: "tenant", in: "query", required: true }],
+    get: { parameters: [{ name: "q", in: "query", required: false }] },
+  },
+  // a $ref parameter the checker cannot resolve
+  "/api/v2/reffed": {
+    get: { parameters: [{ $ref: "#/components/parameters/Foo" }] },
+  },
 };
 
 test("clean tool passes with no failures", () => {
@@ -83,6 +92,36 @@ test("uncovered optional spec param is a warning, not a failure", () => {
 test("trailing-slash spec path matches slashless tool path", () => {
   const { failures } = evaluate(specPaths, [
     { name: "t", path: "/api/v2/listing", schema: { id: required() } },
+  ]);
+  assert.deepEqual(failures, []);
+});
+
+test("path-level params are merged with operation params", () => {
+  const { failures } = evaluate(specPaths, [
+    { name: "t", path: "/api/v2/shared", schema: { tenant: required(), q: optional() } },
+  ]);
+  assert.deepEqual(failures, []);
+});
+
+test("omitting a required path-level param fails", () => {
+  const { failures } = evaluate(specPaths, [
+    { name: "t", path: "/api/v2/shared", schema: { q: optional() } },
+  ]);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /required spec param 'tenant'.*not exposed/);
+});
+
+test("$ref param on the path fails loudly instead of misreporting", () => {
+  const { failures } = evaluate(specPaths, [
+    { name: "t", path: "/api/v2/reffed", schema: { anything: optional() } },
+  ]);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /can't resolve|cannot resolve|\$ref|non-inline/);
+});
+
+test("null path-item does not crash", () => {
+  const { failures } = evaluate({ "/api/v2/empty": null }, [
+    { name: "t", path: "/api/v2/empty", schema: {} },
   ]);
   assert.deepEqual(failures, []);
 });

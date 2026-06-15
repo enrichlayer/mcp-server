@@ -13,7 +13,7 @@
     "start:http": "node build/http-server.js",
     "update-spec": "node scripts/update-spec.mjs",
     "check:spec": "node scripts/check-spec-conformance.mjs",
-    "test": "node --test"
+    "test": "node --test scripts/*.test.mjs"
   },
   "keywords": [
     "mcp",

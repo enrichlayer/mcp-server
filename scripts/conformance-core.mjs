@@ -21,22 +21,41 @@ export const normalizePath = (path) => path.replace(/\/+$/, "");
  */
 export function evaluate(specPaths, toolDefs) {
   const specParamsByPath = new Map();
-  for (const [path, operations] of Object.entries(specPaths)) {
-    const parameters = operations.get?.parameters ?? [];
+  const unresolvablePaths = new Map();
+  for (const [path, pathItem] of Object.entries(specPaths)) {
+    const key = normalizePath(path);
+    // Merge path-item-level params (shared across methods) with the GET op's;
+    // operation-level wins on name clashes (Map last-write), matching OpenAPI.
+    const rawParams = [...(pathItem?.parameters ?? []), ...(pathItem?.get?.parameters ?? [])];
     const queryParams = new Map();
-    for (const p of parameters) {
+    for (const p of rawParams) {
+      // A $ref (or otherwise non-inline) parameter has no resolvable name/in.
+      // Don't silently misreport — flag the whole path as unresolvable.
+      if (p == null || p.$ref || typeof p.name !== "string" || typeof p.in !== "string") {
+        unresolvablePaths.set(key, "a parameter that is a $ref or non-inline object the checker can't resolve");
+        continue;
+      }
       if (p.in === "query") queryParams.set(p.name, p.required === true);
     }
-    specParamsByPath.set(normalizePath(path), queryParams);
+    specParamsByPath.set(key, queryParams);
   }
 
   const failures = [];
   const warnings = [];
 
+  // NOTE: each tool is validated independently against its endpoint's full
+  // param set. If two tools were ever mapped to the same path and one was a
+  // narrow curated subset omitting a required param, that would false-fail.
+  // All current tool paths are distinct, so this is not exercised.
   for (const def of toolDefs) {
-    const specParams = specParamsByPath.get(normalizePath(def.path));
+    const key = normalizePath(def.path);
+    const specParams = specParamsByPath.get(key);
     if (!specParams) {
       failures.push(`${def.name}: endpoint ${def.path} not found in spec`);
+      continue;
+    }
+    if (unresolvablePaths.has(key)) {
+      failures.push(`${def.name}: spec ${def.path} has ${unresolvablePaths.get(key)} — inline it or extend the checker`);
       continue;
     }
 
