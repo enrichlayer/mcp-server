@@ -10,7 +10,10 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "start:http": "node build/http-server.js"
+    "start:http": "node build/http-server.js",
+    "update-spec": "node scripts/update-spec.mjs",
+    "check:spec": "node scripts/check-spec-conformance.mjs",
+    "test": "node --test scripts/*.test.mjs"
   },
   "keywords": [
     "mcp",
@@ -40,7 +43,8 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -203,6 +203,36 @@ npm run start:http
 npx @modelcontextprotocol/inspector node build/index.js
 ```
 
+## API surface conformance
+
+Tool schemas follow the published Enrich Layer OpenAPI spec — the single
+source of truth for the API surface:
+<https://enrichlayer.com/docs/api/v2/openapi.yaml>
+
+A copy of the spec is vendored at `spec/enrichlayer-api.yaml`, and CI runs
+`npm run check:spec` on every pull request. A tool fails the check when:
+
+- its endpoint is not in the spec;
+- it exposes a parameter the spec does not document for that endpoint;
+- a parameter's required/optional flag disagrees with the spec;
+- it omits a parameter the spec marks required.
+
+Optional spec parameters a tool does not expose are reported as warnings —
+tools may deliberately expose a curated subset. The check matches parameter
+**names and required-ness only**; it does not validate enum values or types,
+because the spec does not encode those for query parameters.
+
+When the API changes:
+
+```bash
+npm run update-spec    # refresh spec/enrichlayer-api.yaml from the published URL
+npm run build
+npm run check:spec     # see which tools drifted, fix their schemas
+```
+
+The conformance logic lives in `scripts/conformance-core.mjs` and is unit-tested
+(`npm test`, Node's built-in test runner).
+
 ## License
 
 MIT
