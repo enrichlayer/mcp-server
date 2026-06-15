@@ -13,7 +13,8 @@
     "start:http": "node build/http-server.js",
     "update-spec": "node scripts/update-spec.mjs",
     "check:spec": "node scripts/check-spec-conformance.mjs",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test && npm run check:spec"
   },
   "keywords": [
     "mcp",
@@ -54,5 +55,8 @@
     "manifest.json",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
