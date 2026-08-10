@@ -100,11 +100,21 @@ This starts an Express server on port 3000 (configurable via `PORT` env var) wit
 
 The server captures startup, request, and graceful-shutdown failures when
 `SENTRY_DSN` is configured. Set `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and
-`SENTRY_SERVICE` alongside it to control the event tags; the defaults are the
-current `NODE_ENV`, the package version, and `enrich-layer-mcp-server`.
-Without a DSN, reporting is disabled and the server continues to run. Inject
-the DSN through the deployment secret store or environment file; never commit
-it to source or pass it in a request.
+`SENTRY_SERVICE` alongside it to control the event tags. The defaults are the
+current `NODE_ENV`, the package version, and `enrich-layer-mcp-server` for HTTP
+or `enrich-layer-mcp-server-stdio` for stdio; the environment variables always
+take precedence over those defaults. Missing or invalid DSNs disable reporting
+without affecting server startup. Failure telemetry is scrubbed before it is
+sent: request query strings are removed, credential-like values are redacted,
+and default PII and tracing integrations are disabled. Error text may still be
+forwarded after scrubbing, so configure this only where that operational
+telemetry is permitted.
+
+The application does not load an environment file. A deployment/runtime
+manager must export these variables or inject them through its secret store;
+never commit a DSN to source or pass it in a request. For the production
+`mcp.verticalint.co` deployment, Vault injection and rollout are tracked
+separately in [INF-887](https://linear.app/verticalint/issue/INF-887/inject-sentry-dsn-into-the-deployed-mcp-server).
 
 ## Usage Examples
 
@@ -190,7 +200,11 @@ This calls `enrich_credit_balance` to show your remaining API credits. Costs 0 c
 
 ## Privacy Policy
 
-Enrich Layer collects only the data you explicitly pass as tool parameters (URLs, names, emails). No conversation data, chat history, or personal data is collected or stored. All requests go directly to the Enrich Layer API over HTTPS.
+Enrich Layer collects only the data you explicitly pass as tool parameters (URLs, names, emails). No conversation data or chat history is collected by the
+MCP transport, and all API requests go directly to the Enrich Layer API over
+HTTPS. When optional Sentry self-reporting is configured, scrubbed operational
+failure telemetry may be sent to the configured Sentry project; it is separate
+from the API request path and can be disabled by omitting `SENTRY_DSN`.
 
 For the full privacy policy, see [enrichlayer.com/privacy](https://enrichlayer.com/privacy).
 

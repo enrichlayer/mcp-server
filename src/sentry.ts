@@ -17,13 +17,17 @@ const REDACTED = "[REDACTED]";
 const MAX_SCRUB_DEPTH = 8;
 
 const SECRET_KEY_PATTERN =
-  /(?:api[_-]?key|authorization|cookie|credential|dsn|password|secret|token)/i;
+  /(?:api(?:[_ -]?key)|authorization|cookie|credential|dsn|password|secret|token)/i;
 
 const SECRET_VALUE_PATTERNS = [
-  /\b(?:glpat|gh[pousr]|xox[baprs]-|xapp-\d+-|sk-)[A-Za-z0-9._-]+\b/gi,
+  /\b(?:github_pat|glpat|gh[pousr]|xox[baprs]-|xapp-\d+-|sk-|sntrys?[_-]|sentry[_-])[A-Za-z0-9._-]+\b/gi,
+  /\bhttps?:\/\/[^\s/@:]+(?::[^\s/@]*)?@[^\s/]+\/\d+(?:\/[^\s]*)?/gi,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gi,
+  /\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/gi,
   /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi,
-  /([?&](?:access[_-]?token|api[_-]?key|auth(?:orization)?|password|secret|token)=)[^&\s]+/gi,
+  /((?:access(?:[_ -]?token)|api(?:[_ -]?key)|auth(?:orization)?|credential|password|secret|token)\s*[:=]\s*)[^\s,;]+/gi,
+  /((?:access(?:[_ -]?token)|api(?:[_ -]?key)|auth(?:orization)?|credential|password|secret|token)\s+)[A-Za-z0-9._~+/=-]{8,}/gi,
+  /([?&](?:access(?:[_ -]?token)|api(?:[_ -]?key)|auth(?:orization)?|credential|password|secret|token)=)[^&\s]+/gi,
   /(https?:\/\/)([^/@\s:]+):([^/@\s]+)@/gi,
 ];
 
@@ -45,6 +49,7 @@ export interface RequestFailureContext {
   method: string;
   path: string;
   statusCode?: number;
+  component?: string;
 }
 
 export interface McpSentry {
@@ -122,6 +127,34 @@ function scrubEvent(event: ErrorEvent): ErrorEvent {
   return scrubValue(event) as ErrorEvent;
 }
 
+function isValidDsn(dsn: string): boolean {
+  try {
+    const parsed = new URL(dsn);
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return (
+      (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+      Boolean(parsed.username) &&
+      Boolean(parsed.hostname) &&
+      !parsed.password &&
+      !parsed.search &&
+      !parsed.hash &&
+      /^\/\d+$/.test(pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function disabledSentry(): McpSentry {
+  return {
+    enabled: false,
+    captureStartupFailure: () => undefined,
+    captureRequestFailure: () => undefined,
+    flush: async () => true,
+    shutdown: async () => undefined,
+  };
+}
+
 export function createMcpSentry(config: McpSentryConfig = {}): McpSentry {
   const dsn = (config.dsn ?? process.env.SENTRY_DSN)?.trim();
   const environment =
@@ -132,14 +165,8 @@ export function createMcpSentry(config: McpSentryConfig = {}): McpSentry {
   const sdk = config.sdk ?? defaultSdk;
   const tags = { service, environment, release };
 
-  if (!dsn) {
-    return {
-      enabled: false,
-      captureStartupFailure: () => undefined,
-      captureRequestFailure: () => undefined,
-      flush: async () => true,
-      shutdown: async () => undefined,
-    };
+  if (!dsn || !isValidDsn(dsn)) {
+    return disabledSentry();
   }
 
   try {
@@ -154,13 +181,7 @@ export function createMcpSentry(config: McpSentryConfig = {}): McpSentry {
       beforeSend: scrubEvent,
     });
   } catch {
-    return {
-      enabled: false,
-      captureStartupFailure: () => undefined,
-      captureRequestFailure: () => undefined,
-      flush: async () => true,
-      shutdown: async () => undefined,
-    };
+    return disabledSentry();
   }
 
   const capture = (
@@ -206,8 +227,13 @@ export function createMcpSentry(config: McpSentryConfig = {}): McpSentry {
           method: request.method,
           path: request.path.split("?", 1)[0],
           status_code: request.statusCode?.toString(),
+          component: request.component,
         },
-        { method: request.method, path: request.path.split("?", 1)[0] },
+        {
+          method: request.method,
+          path: request.path.split("?", 1)[0],
+          component: request.component,
+        },
       );
     },
     flush,

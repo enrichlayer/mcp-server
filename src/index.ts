@@ -7,7 +7,9 @@ import {
   safeErrorForLog,
 } from "./sentry.js";
 
-const sentry = createMcpSentry({ service: "enrich-layer-mcp-server-stdio" });
+const sentry = createMcpSentry({
+  service: process.env.SENTRY_SERVICE ?? "enrich-layer-mcp-server-stdio",
+});
 const transport = new StdioServerTransport();
 
 let shuttingDown = false;
@@ -37,7 +39,15 @@ process.once("SIGINT", onSignal);
 process.once("SIGTERM", onSignal);
 
 try {
-  const server = createServer();
+  const server = createServer({
+    onToolFailure: (error, tool) => {
+      sentry.captureRequestFailure(error, {
+        method: "stdio",
+        path: tool.path,
+        component: `tool:${tool.name}`,
+      });
+    },
+  });
   await server.connect(transport);
 } catch (error) {
   sentry.captureStartupFailure(error, "startup");

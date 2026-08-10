@@ -18,6 +18,21 @@ export interface ToolDef {
   schema: ZodRawShape;
 }
 
+export interface ToolFailureContext {
+  name: string;
+  path: string;
+}
+
+export type ToolFailureReporter = (
+  error: unknown,
+  context: ToolFailureContext,
+) => void;
+
+type ToolRequester = (
+  path: string,
+  params: Record<string, string | undefined>,
+) => Promise<unknown>;
+
 export const allToolDefs: ToolDef[] = [
   ...companyToolDefs,
   ...personToolDefs,
@@ -28,17 +43,34 @@ export const allToolDefs: ToolDef[] = [
   ...metaToolDefs,
 ];
 
-export function registerAll(server: McpServer) {
+export function createToolHandler(
+  def: Pick<ToolDef, "name" | "path">,
+  onFailure?: ToolFailureReporter,
+  request: ToolRequester = makeRequest,
+) {
+  return async (params: Record<string, string | undefined>) => {
+    try {
+      const result = await request(def.path, params);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      try {
+        onFailure?.(error, { name: def.name, path: def.path });
+      } catch {
+        // Reporting must never change the tool failure returned to the MCP client.
+      }
+      throw error;
+    }
+  };
+}
+
+export function registerAll(server: McpServer, onFailure?: ToolFailureReporter) {
   for (const def of allToolDefs) {
     server.tool(
       def.name,
       def.description,
       def.schema,
       { title: def.title, readOnlyHint: true, openWorldHint: true },
-      async (params: Record<string, string | undefined>) => {
-        const result = await makeRequest(def.path, params);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      },
+      createToolHandler(def, onFailure),
     );
   }
 }
