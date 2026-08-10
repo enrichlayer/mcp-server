@@ -240,6 +240,7 @@ export async function startHttpServer(
   server.once("error", (error) => {
     sentry.captureStartupFailure(error, "listen");
     console.error("Enrich Layer MCP HTTP server failed:", safeErrorForLog(error));
+    process.exitCode = 1;
     void shutdown().catch((shutdownError) => {
       sentry.captureStartupFailure(shutdownError, "shutdown");
       console.error(

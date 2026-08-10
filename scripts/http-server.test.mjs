@@ -147,3 +147,54 @@ test("synchronous HTTP startup failure awaits the Sentry shutdown boundary", asy
   await assert.rejects(startHttpServer({ port: -1, sentry }));
   assert.deepEqual(calls, ["capture-startup", "shutdown"]);
 });
+
+test("asynchronous HTTP listen failure sets a failing process exit code", async () => {
+  const originalExitCode = process.exitCode;
+  const firstSentry = {
+    enabled: true,
+    captureStartupFailure() {},
+    captureRequestFailure() {},
+    async flush() {
+      return true;
+    },
+    async shutdown() {},
+  };
+  const secondCalls = [];
+  const secondSentry = {
+    enabled: true,
+    captureStartupFailure() {
+      secondCalls.push("capture-startup");
+    },
+    captureRequestFailure() {},
+    async flush() {
+      return true;
+    },
+    async shutdown() {
+      secondCalls.push("shutdown");
+    },
+  };
+  const first = await startHttpServer({ port: 0, sentry: firstSentry });
+  if (!first.server.listening) {
+    await once(first.server, "listening");
+  }
+  const address = first.server.address();
+  assert.notEqual(address, null);
+  const port = typeof address === "object" ? address.port : address;
+  const second = await startHttpServer({ port, sentry: secondSentry });
+
+  try {
+    await once(second.server, "error");
+    assert.equal(process.exitCode, 1);
+    assert.deepEqual(secondCalls, ["capture-startup", "shutdown"]);
+  } finally {
+    await first.shutdown();
+    if (second.server.listening) {
+      await second.shutdown();
+    }
+    if (originalExitCode === undefined) {
+      process.exitCode = undefined;
+    } else {
+      process.exitCode = originalExitCode;
+    }
+  }
+});
