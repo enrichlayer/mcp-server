@@ -96,6 +96,16 @@ npm run start:http
 
 This starts an Express server on port 3000 (configurable via `PORT` env var) with a `/mcp` endpoint for JSON-RPC and a `/health` endpoint for health checks.
 
+### Optional Sentry self-reporting
+
+The server captures startup, request, and graceful-shutdown failures when
+`SENTRY_DSN` is configured. Set `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, and
+`SENTRY_SERVICE` alongside it to control the event tags; the defaults are the
+current `NODE_ENV`, the package version, and `enrich-layer-mcp-server`.
+Without a DSN, reporting is disabled and the server continues to run. Inject
+the DSN through the deployment secret store or environment file; never commit
+it to source or pass it in a request.
+
 ## Usage Examples
 
 ### 1. Look up a company
