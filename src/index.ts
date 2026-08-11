@@ -2,7 +2,56 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+import {
+  createMcpSentry,
+  safeErrorForLog,
+} from "./sentry.js";
 
-const server = createServer();
+const sentry = createMcpSentry({
+  service: process.env.SENTRY_SERVICE ?? "enrich-layer-mcp-server-stdio",
+});
 const transport = new StdioServerTransport();
-await server.connect(transport);
+
+let shuttingDown = false;
+const shutdown = async (): Promise<void> => {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+  process.removeListener("SIGINT", onSignal);
+  process.removeListener("SIGTERM", onSignal);
+  try {
+    await transport.close();
+  } finally {
+    await sentry.shutdown();
+  }
+};
+
+const onSignal = (): void => {
+  void shutdown().catch((error) => {
+    sentry.captureStartupFailure(error, "shutdown");
+    console.error("Enrich Layer MCP stdio shutdown failed:", safeErrorForLog(error));
+    process.exitCode = 1;
+  });
+};
+
+process.once("SIGINT", onSignal);
+process.once("SIGTERM", onSignal);
+
+try {
+  const server = createServer({
+    onToolFailure: (error, tool) => {
+      sentry.captureRequestFailure(error, {
+        method: "stdio",
+        path: tool.path,
+        component: `tool:${tool.name}`,
+      });
+    },
+  });
+  await server.connect(transport);
+} catch (error) {
+  sentry.captureStartupFailure(error, "startup");
+  console.error("Unable to start Enrich Layer MCP stdio server:", safeErrorForLog(error));
+  await shutdown();
+  process.exitCode = 1;
+}
