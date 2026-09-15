@@ -141,6 +141,17 @@ Endpoints:
 
 Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. The API key never leaves the server: tool calls use it against `https://enrichlayer.com` over HTTPS.
 
+### Smoke-testing a deployment
+
+After rolling a new image, walk the whole connector once against the deployed hosts — registration, consent, PKCE token exchange, MCP `initialize`, `tools/list`, a zero-credit `enrich_credit_balance` call, refresh-token rotation, the wrong-key path, and metadata discovery:
+
+```bash
+ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.staging.enrichlayer.com
+ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.enrichlayer.com
+```
+
+The script registers a throwaway OAuth client named `enrich-layer-mcp-smoke`, prints every step with keys and tokens redacted, and exits non-zero when the core path breaks.
+
 ### Optional Sentry self-reporting
 
 The server captures startup, request, and graceful-shutdown failures when
