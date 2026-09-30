@@ -20,7 +20,7 @@ Sign in with your Enrich Layer API key once; access tokens refresh automatically
 | Claude Code | `claude mcp add --transport http enrich-layer https://mcp.enrichlayer.com/mcp`, then type `/mcp` and pick Enrich Layer to sign in. Add `--scope user` to make it available in every project. |
 | Cursor | `.cursor/mcp.json`: `{"mcpServers":{"enrich-layer":{"url":"https://mcp.enrichlayer.com/mcp"}}}` |
 | VS Code | `.vscode/mcp.json`: `{"servers":{"enrich-layer":{"type":"http","url":"https://mcp.enrichlayer.com/mcp"}}}` |
-| ChatGPT | **Settings → Connectors → Advanced → Developer mode**, then **Create**, paste the URL, keep OAuth as the authentication, and connect with your API key. |
+| ChatGPT | **Plugins → Add → Create MCP App**, name it `Enrich Layer`, and paste the URL. Keep OAuth, open **Advanced OAuth settings** and set **Registration method** to **Dynamic Client Registration (DCR)**, then click **Create**, **Connect** and paste your API key. |
 
 Any client that implements the MCP authorization flow (OAuth 2.1 with PKCE, dynamic client registration or client ID metadata documents) works the same way.
 
