@@ -2,9 +2,31 @@
 
 An MCP (Model Context Protocol) server that provides 25 tools for enriching company, person, contact, school, and job data via the [Enrich Layer API](https://enrichlayer.com/docs?utm_source=mcp&utm_medium=integration&utm_campaign=docs).
 
-Use it with any MCP-compatible client: Claude Desktop, Claude Code, Cursor, VS Code, and more.
+Use it with any MCP-compatible client: Claude.ai, Claude Desktop, Cowork, Claude Code, Cursor, VS Code, ChatGPT, and more.
 
-## Quick Start
+## Hosted connector (recommended)
+
+The server runs as a hosted remote MCP endpoint with OAuth, so nothing needs to be installed:
+
+```
+https://mcp.enrichlayer.com/mcp
+```
+
+Sign in with your Enrich Layer API key once; access tokens refresh automatically after that. Get a key at [enrichlayer.com/dashboard](https://enrichlayer.com/dashboard?utm_source=mcp&utm_medium=integration&utm_campaign=dashboard).
+
+| Client | How to connect |
+|--------|----------------|
+| Claude.ai, Claude Desktop, Cowork | **Customize → Connectors → Add custom connector**, name it `Enrich Layer`, paste the URL, click **Add**, then **Connect** and paste your API key. Team and Enterprise owners add it under **Organization settings → Connectors → Add → Custom → Web**; members then click **Connect**. |
+| Claude Code | `claude mcp add --transport http enrich-layer https://mcp.enrichlayer.com/mcp`, then type `/mcp` and pick Enrich Layer to sign in. Add `--scope user` to make it available in every project. |
+| Cursor | `.cursor/mcp.json`: `{"mcpServers":{"enrich-layer":{"url":"https://mcp.enrichlayer.com/mcp"}}}` |
+| VS Code | `.vscode/mcp.json`: `{"servers":{"enrich-layer":{"type":"http","url":"https://mcp.enrichlayer.com/mcp"}}}` |
+| ChatGPT | **Plugins → Add → Create MCP App**, name it `Enrich Layer`, and paste the URL. Keep OAuth, open **Advanced OAuth settings** and set **Registration method** to **Dynamic Client Registration (DCR)**, then click **Create**, **Connect** and paste your API key. |
+
+Any client that implements the MCP authorization flow (OAuth 2.1 with PKCE, dynamic client registration or client ID metadata documents) works the same way.
+
+## Local server (npx)
+
+Prefer to run the server on your own machine (for example with a client that cannot reach remote servers)? It also ships as a stdio server:
 
 ```bash
 npx -y @enrichlayer/mcp-server
@@ -18,11 +40,11 @@ export ENRICH_LAYER_API_KEY=your_api_key_here
 
 Get your API key at [enrichlayer.com/dashboard](https://enrichlayer.com/dashboard?utm_source=mcp&utm_medium=integration&utm_campaign=dashboard).
 
-## Configuration
+## Local client configuration
 
 ### Claude Desktop
 
-Add to your `claude_desktop_config.json`:
+Add to your `claude_desktop_config.json` (or use the hosted connector above — no config file needed):
 
 ```json
 {
@@ -40,7 +62,14 @@ Add to your `claude_desktop_config.json`:
 
 ### Claude Desktop (MCPB Extension)
 
-Download the `.mcpb` file from [Releases](https://github.com/enrichlayer/mcp-server/releases) and open it in Claude Desktop. You'll be prompted to enter your API key during setup.
+`manifest.json` describes the server as a Desktop Extension. Build the bundle from a checkout and open it in Claude Desktop, which prompts for your API key during setup:
+
+```bash
+npm install && npm run build
+npx @anthropic-ai/mcpb pack   # produces enrich-layer.mcpb in the current directory
+```
+
+Most Desktop users should simply add the hosted connector instead.
 
 ### Claude Code
 
@@ -88,13 +117,40 @@ Add to your VS Code MCP settings (`.vscode/mcp.json`):
 
 ### Remote HTTP Server
 
-For remote deployments, the server also supports Streamable HTTP transport:
+The hosted connector at `mcp.enrichlayer.com` is this same package running the Streamable HTTP transport behind an OAuth 2.1 authorization server:
 
 ```bash
 npm run start:http
 ```
 
-This starts an Express server on port 3000 (configurable via `PORT` env var) with a `/mcp` endpoint for JSON-RPC and a `/health` endpoint for health checks.
+| Environment variable | Purpose |
+|----------------------|---------|
+| `PORT` | Listen port (default `3000`). |
+| `AUTH_BASE_URL` | Issuer URL of the authorization server; must equal the `iss` claim it signs. |
+| `MCP_BASE_URL` | Public origin of this server. The advertised resource identifier is `${MCP_BASE_URL}/mcp`. |
+| `AUTH_JWT_SECRET` | HS256 secret shared with the authorization server. |
+
+Endpoints:
+
+| Endpoint | Behaviour |
+|----------|-----------|
+| `POST /mcp` | JSON-RPC over Streamable HTTP (stateless). Requires `Authorization: Bearer <access token>`. |
+| `GET` / `DELETE /mcp` | `405 Method Not Allowed` — no server-initiated stream and no sessions to terminate. |
+| `GET /.well-known/oauth-protected-resource` and `.../oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata: `resource` (`${MCP_BASE_URL}/mcp`), `authorization_servers` (`AUTH_BASE_URL`), `scopes_supported` (`api`). |
+| `GET /health` | `{ status, server, version }`. |
+
+Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. The API key never leaves the server: tool calls use it against `https://enrichlayer.com` over HTTPS.
+
+### Smoke-testing a deployment
+
+After rolling a new image, walk the whole connector once against the deployed hosts — registration, consent, PKCE token exchange, MCP `initialize`, `tools/list`, a zero-credit `enrich_credit_balance` call, refresh-token rotation, the wrong-key path, and metadata discovery:
+
+```bash
+ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.staging.enrichlayer.com
+ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.enrichlayer.com
+```
+
+The script registers a throwaway OAuth client named `enrich-layer-mcp-smoke`, prints every step with keys and tokens redacted, and exits non-zero when the core path breaks.
 
 ### Optional Sentry self-reporting
 
@@ -206,7 +262,7 @@ HTTPS. When optional Sentry self-reporting is configured, scrubbed operational
 failure telemetry may be sent to the configured Sentry project; it is separate
 from the API request path and can be disabled by omitting `SENTRY_DSN`.
 
-For the full privacy policy, see [enrichlayer.com/privacy](https://enrichlayer.com/privacy).
+For the full privacy policy, see [enrichlayer.com/privacy-policy](https://enrichlayer.com/privacy-policy).
 
 ## Development
 

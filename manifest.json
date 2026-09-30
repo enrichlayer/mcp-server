@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "enrich-layer",
   "display_name": "Enrich Layer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Data enrichment from professional networks — company profiles, person data, work emails, contacts, job listings, and more.",
   "long_description": "Enrich Layer provides 25 tools for enriching company and person data from professional networks. Get company profiles, find employees, look up work emails, search for people and companies, and more — all directly from Claude.",
   "author": {
@@ -58,7 +58,7 @@
   },
   "keywords": ["enrichment", "company", "person", "email", "professional-network", "data"],
   "license": "MIT",
-  "privacy_policies": ["https://enrichlayer.com/privacy"],
+  "privacy_policies": ["https://enrichlayer.com/privacy-policy"],
   "compatibility": {
     "claude_desktop": ">=0.10.0",
     "platforms": ["darwin", "win32", "linux"],
