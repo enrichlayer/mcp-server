@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { SignJWT } from "jose";
+import { generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
 import { startHttpServer } from "../build/http-server.js";
 
 // The server reads its configuration from the environment each time it starts;
@@ -51,15 +51,23 @@ async function withEnv(overrides, fn) {
   }
 }
 
-async function mint({ audience = "https://mcp.example.com/mcp", issuer = "https://auth.example.com" } = {}) {
-  return new SignJWT({ api_key: "el_test_key", scope: "api" })
-    .setProtectedHeader({ alg: "HS256" })
+async function mint({
+  audience = "https://mcp.example.com/mcp",
+  issuer = "https://auth.example.com",
+  claims = { api_key: "el_test_key", scope: "api" },
+  alg = "HS256",
+  key = new TextEncoder().encode("test-secret"),
+} = {}) {
+  let jwt = new SignJWT(claims)
+    .setProtectedHeader({ alg })
     .setSubject("client-123")
     .setIssuer(issuer)
-    .setAudience(audience)
     .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(new TextEncoder().encode("test-secret"));
+    .setExpirationTime("1h");
+  // `null` leaves the claim out — an explicit `undefined` would just
+  // re-trigger the destructuring default above.
+  if (audience !== null) jwt = jwt.setAudience(audience);
+  return jwt.sign(key);
 }
 
 const INITIALIZE = JSON.stringify({
@@ -129,6 +137,47 @@ test("a token minted for another resource is rejected with 401", async () => {
     const challenge = response.headers.get("www-authenticate");
     assert.match(challenge, /error="invalid_token"/);
     assert.match(challenge, /error_description="Access token was not issued for this resource server"/);
+    assert.match(challenge, /resource_metadata="https:\/\/mcp\.example\.com\/\.well-known\/oauth-protected-resource\/mcp"/);
+  });
+});
+
+test("a token without aud, as minted before the authorization server bound tokens, is rejected with 401", async () => {
+  await withServer(async (base) => {
+    const response = await mcpPost(base, await mint({ audience: null }));
+    assert.equal(response.status, 401);
+    assert.match(response.headers.get("www-authenticate"), /error_description="Access token was not issued for this resource server"/);
+  });
+});
+
+test("an unsigned token and tokens signed with another algorithm are rejected with 401", async () => {
+  const { privateKey } = await generateKeyPair("RS256");
+  const tokens = {
+    none: new UnsecuredJWT({ api_key: "el_test_key", scope: "api" })
+      .setSubject("client-123")
+      .setIssuer("https://auth.example.com")
+      .setAudience("https://mcp.example.com/mcp")
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .encode(),
+    RS256: await mint({ alg: "RS256", key: privateKey }),
+    HS512: await mint({ alg: "HS512" }),
+  };
+  await withServer(async (base) => {
+    for (const [alg, token] of Object.entries(tokens)) {
+      const response = await mcpPost(base, token);
+      assert.equal(response.status, 401, alg);
+      assert.match(response.headers.get("www-authenticate"), /error_description="Access token is invalid"/, alg);
+    }
+  });
+});
+
+test("a valid token without the api scope is refused with 403 insufficient_scope", async () => {
+  await withServer(async (base) => {
+    const response = await mcpPost(base, await mint({ claims: { api_key: "el_test_key" } }));
+    assert.equal(response.status, 403);
+    const challenge = response.headers.get("www-authenticate");
+    assert.match(challenge, /error="insufficient_scope"/);
+    assert.match(challenge, /scope="api"/);
     assert.match(challenge, /resource_metadata="https:\/\/mcp\.example\.com\/\.well-known\/oauth-protected-resource\/mcp"/);
   });
 });

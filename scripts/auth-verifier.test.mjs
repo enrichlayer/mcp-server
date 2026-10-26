@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SignJWT } from "jose";
+import { generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
 import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { createVerifier, verifierConfigFromEnv } from "../build/auth/verifier.js";
 import {
@@ -24,9 +24,11 @@ async function mint({
   subject = "client-123",
   claims = { api_key: "el_test_key", scope: "api" },
   expiresIn = "1h",
+  alg = "HS256",
+  key = new TextEncoder().encode(secret),
 } = {}) {
   let jwt = new SignJWT(claims)
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setSubject(subject)
     .setIssuedAt()
     .setExpirationTime(expiresIn);
@@ -34,7 +36,7 @@ async function mint({
   // re-trigger the destructuring default above.
   if (issuer !== null) jwt = jwt.setIssuer(issuer);
   if (audience !== null) jwt = jwt.setAudience(audience);
-  return jwt.sign(new TextEncoder().encode(secret));
+  return jwt.sign(key);
 }
 
 test("canonicalizeResource lowercases, drops default ports, fragments are rejected, trailing slashes stripped", () => {
@@ -107,6 +109,28 @@ test("rejects a token signed with a different secret", async () => {
     assert.equal(error.message, "Access token is invalid");
     return true;
   });
+});
+
+test("rejects an unsigned token and tokens signed with another algorithm", async () => {
+  const { privateKey } = await generateKeyPair("RS256");
+  const tokens = {
+    none: new UnsecuredJWT({ api_key: "el_test_key", scope: "api" })
+      .setSubject("client-123")
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCES[0])
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .encode(),
+    RS256: await mint({ alg: "RS256", key: privateKey }),
+    HS512: await mint({ alg: "HS512" }),
+  };
+  for (const [alg, token] of Object.entries(tokens)) {
+    await assert.rejects(verifier()(token), (error) => {
+      assert.ok(error instanceof InvalidTokenError, alg);
+      assert.equal(error.message, "Access token is invalid", alg);
+      return true;
+    });
+  }
 });
 
 test("rejects a token without an api_key claim", async () => {
