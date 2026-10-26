@@ -7,7 +7,16 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { createServer } from "./server.js";
 import { authContext } from "./auth/context.js";
-import { getApiKey, verifyAccessToken } from "./auth/verifier.js";
+import {
+  createVerifier,
+  getApiKey,
+  verifierConfigFromEnv,
+} from "./auth/verifier.js";
+import {
+  canonicalizeResource,
+  MCP_PATH,
+  resourceIdentifier,
+} from "./auth/resource.js";
 import {
   createMcpSentry,
   safeErrorForLog,
@@ -18,8 +27,6 @@ const { version } = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
 
-const AUTH_BASE_URL = process.env.AUTH_BASE_URL || "http://localhost:3001";
-const MCP_BASE_URL = process.env.MCP_BASE_URL || "http://localhost:3000";
 const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
 const HTTP_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -52,24 +59,49 @@ function isMalformedJson(error: unknown): boolean {
 }
 
 export function createHttpApp(sentry: McpSentry): Express {
-  const app = createMcpExpressApp({ host: "0.0.0.0" });
+  // Configuration is read here, not at import, so a missing AUTH_JWT_SECRET or
+  // a malformed URL is a startup failure that startHttpServer reports.
+  const verifierConfig = verifierConfigFromEnv();
+  const verifyAccessToken = createVerifier(verifierConfig);
+  // Canonical like the verifier's audiences, so a trailing slash in
+  // MCP_BASE_URL cannot break the challenge URL below.
+  const mcpBaseUrl = canonicalizeResource(
+    process.env.MCP_BASE_URL || "http://localhost:3000",
+  );
+  // RFC 9728 §3.1: the path-suffixed document is the one clients try first when
+  // the MCP endpoint has a path component, so the 401 challenge points there.
+  const resourceMetadataUrl = `${mcpBaseUrl}${RESOURCE_METADATA_PATH}${MCP_PATH}`;
 
-  app.get(RESOURCE_METADATA_PATH, (_req, res) => {
-    res.json({
-      resource: MCP_BASE_URL,
-      authorization_servers: [AUTH_BASE_URL],
-      scopes_supported: ["api"],
-      resource_name: "Enrich Layer MCP Server",
-      resource_documentation: "https://enrichlayer.com/docs",
-    });
-  });
+  const app = createMcpExpressApp({ host: "0.0.0.0" });
+  app.disable("x-powered-by");
+
+  const protectedResourceMetadata = {
+    // What a user types into Claude — the canonical RFC 8707 identifier the
+    // authorization server binds tokens to (see auth/resource.ts).
+    resource: resourceIdentifier(mcpBaseUrl),
+    // The canonical issuer the verifier requires in `iss`, so discovery cannot
+    // send clients to an issuer other than the one their tokens carry.
+    authorization_servers: [verifierConfig.issuer],
+    scopes_supported: ["api"],
+    bearer_methods_supported: ["header"],
+    resource_name: "Enrich Layer MCP Server",
+    resource_documentation: "https://enrichlayer.com/integrations/mcp",
+  };
+  // RFC 9728 §3.1: clients try the path-suffixed document first when the MCP
+  // endpoint has a path component, then the root — serve the same JSON at both.
+  app.get(
+    [RESOURCE_METADATA_PATH, `${RESOURCE_METADATA_PATH}${MCP_PATH}`],
+    (_req, res) => {
+      res.json(protectedResourceMetadata);
+    },
+  );
 
   app.post(
-    "/mcp",
+    MCP_PATH,
     requireBearerAuth({
       verifier: { verifyAccessToken },
       requiredScopes: ["api"],
-      resourceMetadataUrl: `${MCP_BASE_URL}${RESOURCE_METADATA_PATH}`,
+      resourceMetadataUrl,
     }),
     async (req, res) => {
       try {
@@ -123,6 +155,20 @@ export function createHttpApp(sentry: McpSentry): Express {
       }
     },
   );
+
+  // Stateless Streamable HTTP: no server-initiated stream (GET) and no session
+  // to terminate (DELETE). Answer 405 + JSON instead of Express's HTML 404 so
+  // MCP clients get a protocol-shaped response.
+  app.all(MCP_PATH, (_req, res) => {
+    res.status(405).set("Allow", "POST").json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed. This MCP server accepts POST only.",
+      },
+      id: null,
+    });
+  });
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", server: "enrich-layer-mcp", version });

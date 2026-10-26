@@ -4,6 +4,10 @@ import net from "node:net";
 import { test } from "node:test";
 import { startHttpServer } from "../build/http-server.js";
 
+// The server refuses to start without the secret it shares with the
+// authorization server; node --test runs each file in its own process.
+process.env.AUTH_JWT_SECRET = "test-secret";
+
 test("HTTP server shutdown invokes the Sentry flush boundary", async () => {
   const calls = [];
   const sentry = {
@@ -146,6 +150,46 @@ test("synchronous HTTP startup failure awaits the Sentry shutdown boundary", asy
 
   await assert.rejects(startHttpServer({ port: -1, sentry }));
   assert.deepEqual(calls, ["capture-startup", "shutdown"]);
+});
+
+test("HTTP startup without AUTH_JWT_SECRET is refused and reported as a startup failure", async () => {
+  const secret = process.env.AUTH_JWT_SECRET;
+  try {
+    for (const missing of [undefined, ""]) {
+      const calls = [];
+      const sentry = {
+        enabled: true,
+        captureStartupFailure() {
+          calls.push("capture-startup");
+        },
+        captureRequestFailure() {
+          calls.push("capture-request");
+        },
+        async flush() {
+          calls.push("flush");
+          return true;
+        },
+        async shutdown() {
+          calls.push("shutdown");
+        },
+      };
+      if (missing === undefined) {
+        delete process.env.AUTH_JWT_SECRET;
+      } else {
+        process.env.AUTH_JWT_SECRET = missing;
+      }
+
+      await assert.rejects(async () => {
+        // Only reached when startup wrongly succeeds; close it so the failure
+        // is reported instead of the listening server holding the run open.
+        const started = await startHttpServer({ port: 0, sentry });
+        await started.shutdown();
+      }, /AUTH_JWT_SECRET/);
+      assert.deepEqual(calls, ["capture-startup", "shutdown"]);
+    }
+  } finally {
+    process.env.AUTH_JWT_SECRET = secret;
+  }
 });
 
 test("asynchronous HTTP listen failure sets a failing process exit code", async () => {
