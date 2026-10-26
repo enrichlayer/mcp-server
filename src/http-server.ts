@@ -7,7 +7,11 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { createServer } from "./server.js";
 import { authContext } from "./auth/context.js";
-import { getApiKey, verifyAccessToken } from "./auth/verifier.js";
+import {
+  createVerifier,
+  getApiKey,
+  verifierConfigFromEnv,
+} from "./auth/verifier.js";
 import { MCP_PATH, resourceIdentifier } from "./auth/resource.js";
 import {
   createMcpSentry,
@@ -19,12 +23,7 @@ const { version } = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
 
-const AUTH_BASE_URL = process.env.AUTH_BASE_URL || "http://localhost:3001";
-const MCP_BASE_URL = process.env.MCP_BASE_URL || "http://localhost:3000";
 const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
-// RFC 9728 §3.1: the path-suffixed document is the one clients try first when
-// the MCP endpoint has a path component, so the 401 challenge points there.
-const RESOURCE_METADATA_URL = `${MCP_BASE_URL}${RESOURCE_METADATA_PATH}${MCP_PATH}`;
 const HTTP_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 interface HttpErrorLike {
@@ -56,14 +55,23 @@ function isMalformedJson(error: unknown): boolean {
 }
 
 export function createHttpApp(sentry: McpSentry): Express {
+  // Configuration is read here, not at import, so a missing AUTH_JWT_SECRET or
+  // a malformed URL is a startup failure that startHttpServer reports.
+  const verifyAccessToken = createVerifier(verifierConfigFromEnv());
+  const authBaseUrl = process.env.AUTH_BASE_URL || "http://localhost:3001";
+  const mcpBaseUrl = process.env.MCP_BASE_URL || "http://localhost:3000";
+  // RFC 9728 §3.1: the path-suffixed document is the one clients try first when
+  // the MCP endpoint has a path component, so the 401 challenge points there.
+  const resourceMetadataUrl = `${mcpBaseUrl}${RESOURCE_METADATA_PATH}${MCP_PATH}`;
+
   const app = createMcpExpressApp({ host: "0.0.0.0" });
   app.disable("x-powered-by");
 
   const protectedResourceMetadata = {
     // What a user types into Claude — the canonical RFC 8707 identifier the
     // authorization server binds tokens to (see auth/resource.ts).
-    resource: resourceIdentifier(MCP_BASE_URL),
-    authorization_servers: [AUTH_BASE_URL],
+    resource: resourceIdentifier(mcpBaseUrl),
+    authorization_servers: [authBaseUrl],
     scopes_supported: ["api"],
     bearer_methods_supported: ["header"],
     resource_name: "Enrich Layer MCP Server",
@@ -83,7 +91,7 @@ export function createHttpApp(sentry: McpSentry): Express {
     requireBearerAuth({
       verifier: { verifyAccessToken },
       requiredScopes: ["api"],
-      resourceMetadataUrl: RESOURCE_METADATA_URL,
+      resourceMetadataUrl,
     }),
     async (req, res) => {
       try {

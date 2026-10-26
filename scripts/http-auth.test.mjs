@@ -2,15 +2,14 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
 import { SignJWT } from "jose";
+import { startHttpServer } from "../build/http-server.js";
 
-// The verifier reads its config from the environment at module load, so the
-// env is set before the dynamic import below — node --test runs each file in
-// its own process, so this cannot leak into the other test files.
+// The server reads its configuration from the environment each time it starts;
+// node --test runs each file in its own process, so this cannot leak into the
+// other test files.
 process.env.AUTH_JWT_SECRET = "test-secret";
 process.env.AUTH_BASE_URL = "https://auth.example.com";
 process.env.MCP_BASE_URL = "https://mcp.example.com";
-
-const { startHttpServer } = await import("../build/http-server.js");
 
 const noopSentry = {
   enabled: false,

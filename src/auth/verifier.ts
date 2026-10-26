@@ -1,6 +1,7 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { errors as joseErrors, jwtVerify, type JWTPayload } from "jose";
+import { safeErrorForLog } from "../sentry.js";
 import { canonicalizeResource, expectedAudiences } from "./resource.js";
 
 interface TokenExtra {
@@ -16,13 +17,17 @@ export interface VerifierConfig {
   audiences: string[];
 }
 
+/**
+ * Throws without AUTH_JWT_SECRET: a server that cannot verify any token would
+ * answer 401 to every request and send every client back through OAuth.
+ */
 export function verifierConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): VerifierConfig {
-  const secret = env.AUTH_JWT_SECRET ?? "";
+  const secret = env.AUTH_JWT_SECRET;
   if (!secret) {
-    console.warn(
-      "WARNING: AUTH_JWT_SECRET is not set — JWT verification will fail",
+    throw new Error(
+      "AUTH_JWT_SECRET is not set; the HTTP server needs the secret it shares with the authorization server to verify access tokens",
     );
   }
   return {
@@ -56,20 +61,28 @@ export function createVerifier(
 ): (token: string) => Promise<AuthInfo> {
   const key = new TextEncoder().encode(config.secret);
   return async (token) => {
-    let payload: JWTPayload;
     try {
       // jose rejects a missing/mismatched `iss` or `aud` and an expired `exp` —
       // the MCP spec's "MUST validate that tokens were issued specifically for
       // them" (RFC 8707 §2) is this `audience` option.
-      ({ payload } = await jwtVerify(token, key, {
+      const { payload } = await jwtVerify(token, key, {
         algorithms: ["HS256"],
         issuer: config.issuer,
         audience: config.audiences,
-      }));
+      });
+      return authInfoFromPayload(token, payload);
     } catch (error) {
-      throw toInvalidTokenError(error);
+      if (error instanceof joseErrors.JOSEError) {
+        throw logRejection(toInvalidTokenError(error), error);
+      }
+      if (error instanceof InvalidTokenError) {
+        throw logRejection(error);
+      }
+      // Not a token problem but a fault on this side: the middleware answers
+      // 500 rather than sending the client back through OAuth.
+      console.error("Error verifying access token:", safeErrorForLog(error));
+      throw error;
     }
-    return authInfoFromPayload(token, payload);
   };
 }
 
@@ -80,10 +93,7 @@ export function createVerifier(
  * failures are mapped here. Descriptions stay free of double quotes: the SDK
  * interpolates them verbatim into the WWW-Authenticate header.
  */
-function toInvalidTokenError(error: unknown): InvalidTokenError {
-  if (error instanceof InvalidTokenError) {
-    return error;
-  }
+function toInvalidTokenError(error: joseErrors.JOSEError): InvalidTokenError {
   if (error instanceof joseErrors.JWTExpired) {
     return new InvalidTokenError("Access token has expired");
   }
@@ -98,7 +108,23 @@ function toInvalidTokenError(error: unknown): InvalidTokenError {
   return new InvalidTokenError("Access token is invalid");
 }
 
-export const verifyAccessToken = createVerifier(verifierConfigFromEnv());
+/** One line per rejected token: jose's code and claim, never the token or the key. */
+function logRejection(
+  rejection: InvalidTokenError,
+  cause?: joseErrors.JOSEError,
+): InvalidTokenError {
+  let detail = "";
+  if (cause) {
+    const claim =
+      cause instanceof joseErrors.JWTClaimValidationFailed ||
+      cause instanceof joseErrors.JWTExpired
+        ? ` claim=${cause.claim} reason=${cause.reason}`
+        : "";
+    detail = ` (${cause.code}${claim})`;
+  }
+  console.warn(`Rejected access token: ${rejection.message}${detail}`);
+  return rejection;
+}
 
 export function getApiKey(auth: AuthInfo): string {
   const extra = auth.extra as TokenExtra | undefined;

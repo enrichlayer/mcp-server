@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SignJWT } from "jose";
 import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import { createVerifier } from "../build/auth/verifier.js";
+import { createVerifier, verifierConfigFromEnv } from "../build/auth/verifier.js";
 import {
   canonicalizeResource,
   expectedAudiences,
@@ -130,4 +130,48 @@ test("rejects a token without a subject", async () => {
     assert.match(error.message, /sub claim/);
     return true;
   });
+});
+
+test("verifierConfigFromEnv refuses a missing or empty AUTH_JWT_SECRET", () => {
+  assert.throws(() => verifierConfigFromEnv({}), /AUTH_JWT_SECRET/);
+  assert.throws(() => verifierConfigFromEnv({ AUTH_JWT_SECRET: "" }), /AUTH_JWT_SECRET/);
+});
+
+test("a fault that is not a jose error is logged and propagates instead of becoming a 401", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const error = t.mock.method(console, "error", () => {});
+  // A zero-length HMAC key makes WebCrypto throw a DOMException, not a jose
+  // error: the token is not the problem, so the client must not be sent back
+  // through OAuth.
+  await assert.rejects(verifier({ secret: "" })(await mint()), (thrown) => {
+    assert.ok(!(thrown instanceof InvalidTokenError));
+    return true;
+  });
+  assert.equal(error.mock.callCount(), 1);
+  assert.equal(warn.mock.callCount(), 0);
+});
+
+test("each rejection logs one line with jose's code and claim, never the token or the key", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const token = await mint({ audience: null });
+  await assert.rejects(verifier()(token), InvalidTokenError);
+  assert.equal(warn.mock.callCount(), 1);
+  const line = warn.mock.calls[0].arguments.join(" ");
+  assert.match(line, /ERR_JWT_CLAIM_VALIDATION_FAILED/);
+  assert.match(line, /claim=aud/);
+  assert.match(line, /reason=missing/);
+  assert.doesNotMatch(line, /\n/);
+  for (const secret of [token, "el_test_key", SECRET]) {
+    assert.equal(line.includes(secret), false, `logged ${secret}`);
+  }
+});
+
+test("a rejection by the claim checks after jose logs one line too", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const token = await mint({ claims: { scope: "api" } });
+  await assert.rejects(verifier()(token), InvalidTokenError);
+  assert.equal(warn.mock.callCount(), 1);
+  const line = warn.mock.calls[0].arguments.join(" ");
+  assert.match(line, /api_key claim/);
+  assert.equal(line.includes(token), false);
 });
