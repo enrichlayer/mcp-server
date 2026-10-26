@@ -22,7 +22,7 @@ Sign in with your Enrich Layer API key once; access tokens refresh automatically
 | VS Code | `.vscode/mcp.json`: `{"servers":{"enrich-layer":{"type":"http","url":"https://mcp.enrichlayer.com/mcp"}}}` |
 | ChatGPT | **Plugins → Add → Create MCP App**, name it `Enrich Layer`, and paste the URL. Keep OAuth, open **Advanced OAuth settings** and set **Registration method** to **Dynamic Client Registration (DCR)**, then click **Create**, **Connect** and paste your API key. |
 
-Any client that implements the MCP authorization flow (OAuth 2.1 with PKCE, dynamic client registration or client ID metadata documents) works the same way.
+Any client that implements the MCP authorization flow (OAuth 2.1 with PKCE, plus dynamic client registration or a client ID metadata document) works the same way. A client ID metadata document must leave `token_endpoint_auth_method` unset or set it to `none`: the authorization server rejects any other value, which is why the ChatGPT steps above select dynamic client registration.
 
 ## Local server (npx)
 
@@ -65,11 +65,10 @@ Add to your `claude_desktop_config.json` (or use the hosted connector above — 
 `manifest.json` describes the server as a Desktop Extension. Build the bundle from a checkout and open it in Claude Desktop, which prompts for your API key during setup:
 
 ```bash
-npm install && npm run build
-npx @anthropic-ai/mcpb pack   # produces enrich-layer.mcpb in the current directory
+npm ci && npm run build && npm prune --omit=dev && npx @anthropic-ai/mcpb pack . enrich-layer.mcpb
 ```
 
-Most Desktop users should simply add the hosted connector instead.
+`npm prune --omit=dev` keeps development dependencies out of the bundle (run `npm install` before building again), and naming the output keeps it `enrich-layer.mcpb` whatever the checkout directory is called. Most Desktop users should simply add the hosted connector instead.
 
 ### Claude Code
 
@@ -128,7 +127,9 @@ npm run start:http
 | `PORT` | Listen port (default `3000`). |
 | `AUTH_BASE_URL` | Issuer URL of the authorization server; must equal the `iss` claim it signs. |
 | `MCP_BASE_URL` | Public origin of this server. The advertised resource identifier is `${MCP_BASE_URL}/mcp`. |
-| `AUTH_JWT_SECRET` | HS256 secret shared with the authorization server. |
+| `AUTH_JWT_SECRET` | Required. HS256 secret shared with the authorization server; the server refuses to start without it. |
+
+`AUTH_BASE_URL` and `MCP_BASE_URL` are used in canonical form: lowercase scheme and host, no default port, no trailing slash.
 
 Endpoints:
 
@@ -139,7 +140,7 @@ Endpoints:
 | `GET /.well-known/oauth-protected-resource` and `.../oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata: `resource` (`${MCP_BASE_URL}/mcp`), `authorization_servers` (`AUTH_BASE_URL`), `scopes_supported` (`api`). |
 | `GET /health` | `{ status, server, version }`. |
 
-Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. Access tokens carry the API key as a signed but unencrypted claim, so the MCP client holding the token can read it; this server uses it only for HTTPS calls to `https://enrichlayer.com`.
+Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. The authorization server issues tokens only for its `MCP_RESOURCE_URL` (or that URL's bare origin), which defaults to `${AUTH_BASE_URL}/mcp`, so the two servers agree only while they share one origin, as they do on `mcp.enrichlayer.com`. When the origins differ (for example the default local ports, 3001 for the authorization server and 3000 for this one), set `MCP_RESOURCE_URL` to this server's `${MCP_BASE_URL}/mcp` on the authorization server; otherwise it refuses the client's `resource` parameter or, for a client that sends none, mints tokens this server rejects with `401`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. Access tokens carry the API key as a signed but unencrypted claim, so the MCP client holding the token can read it; this server uses it only for HTTPS calls to `https://enrichlayer.com`.
 
 ### Smoke-testing a deployment
 
@@ -169,9 +170,9 @@ telemetry is permitted.
 
 The application does not load an environment file. A deployment/runtime
 manager must export these variables or inject them through its secret store;
-never commit a DSN to source or pass it in a request. For the production
-`mcp.verticalint.co` deployment, Vault injection and rollout are tracked
-separately in [INF-887](https://linear.app/verticalint/issue/INF-887/inject-sentry-dsn-into-the-deployed-mcp-server).
+never commit a DSN to source or pass it in a request. Sentry for the hosted
+`mcp.enrichlayer.com` deployment is configured in its infrastructure, not in
+this repository.
 
 ## Usage Examples
 
