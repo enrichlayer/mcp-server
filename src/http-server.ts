@@ -8,7 +8,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { createServer } from "./server.js";
 import { authContext } from "./auth/context.js";
 import { getApiKey, verifyAccessToken } from "./auth/verifier.js";
-import { resourceIdentifier } from "./auth/resource.js";
+import { MCP_PATH, resourceIdentifier } from "./auth/resource.js";
 import {
   createMcpSentry,
   safeErrorForLog,
@@ -22,7 +22,6 @@ const { version } = createRequire(import.meta.url)("../package.json") as {
 const AUTH_BASE_URL = process.env.AUTH_BASE_URL || "http://localhost:3001";
 const MCP_BASE_URL = process.env.MCP_BASE_URL || "http://localhost:3000";
 const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
-const MCP_PATH = "/mcp";
 // RFC 9728 §3.1: the path-suffixed document is the one clients try first when
 // the MCP endpoint has a path component, so the 401 challenge points there.
 const RESOURCE_METADATA_URL = `${MCP_BASE_URL}${RESOURCE_METADATA_PATH}${MCP_PATH}`;
