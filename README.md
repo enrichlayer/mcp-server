@@ -139,18 +139,19 @@ Endpoints:
 | `GET /.well-known/oauth-protected-resource` and `.../oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata: `resource` (`${MCP_BASE_URL}/mcp`), `authorization_servers` (`AUTH_BASE_URL`), `scopes_supported` (`api`). |
 | `GET /health` | `{ status, server, version }`. |
 
-Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. The API key never leaves the server: tool calls use it against `https://enrichlayer.com` over HTTPS.
+Access tokens are HS256 JWTs minted by the authorization server (the `apps/auth` app in the Enrich Layer web platform) with `iss` = `AUTH_BASE_URL`, `aud` = `${MCP_BASE_URL}/mcp` (the bare origin is accepted too), `sub` = OAuth client id, `api_key` = the user's Enrich Layer API key, and `scope` = `api`. Tokens without the expected `aud` or `iss`, expired tokens, and malformed tokens receive `401` with a `WWW-Authenticate` challenge that points clients at the protected-resource metadata, which is what triggers the OAuth flow (or a token refresh) in Claude and other MCP clients. Access tokens carry the API key as a signed but unencrypted claim, so the MCP client holding the token can read it; this server uses it only for HTTPS calls to `https://enrichlayer.com`.
 
 ### Smoke-testing a deployment
 
-After rolling a new image, walk the whole connector once against the deployed hosts — registration, consent, PKCE token exchange, MCP `initialize`, `tools/list`, a zero-credit `enrich_credit_balance` call, refresh-token rotation, the wrong-key path, and metadata discovery:
+After rolling a new image, walk the whole connector once against the deployed hosts — registration, consent, PKCE token exchange (including the token's `iss` and `aud`), MCP `initialize`, `tools/list`, a zero-credit `enrich_credit_balance` call, the `GET`/`DELETE` 405s, refresh-token rotation and reuse, the wrong-key path, and the discovery chain from the `401` challenge:
 
 ```bash
+npm run build   # the expected tool count comes from the build
 ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.staging.enrichlayer.com
 ENRICHLAYER_API_KEY=<your key> node scripts/smoke-remote.mjs https://mcp.enrichlayer.com
 ```
 
-The script registers a throwaway OAuth client named `enrich-layer-mcp-smoke`, prints every step with keys and tokens redacted, and exits non-zero when the core path breaks.
+Every step is asserted: the script stops at the first mismatch with `FAIL: <step>: <what>` and exit code 1 (2 when the key or the build is missing), and it never prints the API key, the client secret, authorization codes, or tokens. Each run registers a throwaway OAuth client named `enrich-layer-mcp-smoke` and leaves that registration and a refresh token on the target environment until they expire. `npm test` runs the script against a local stand-in deployment to prove each check fails when it should.
 
 ### Optional Sentry self-reporting
 
