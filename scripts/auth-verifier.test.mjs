@@ -137,6 +137,17 @@ test("verifierConfigFromEnv refuses a missing or empty AUTH_JWT_SECRET", () => {
   assert.throws(() => verifierConfigFromEnv({ AUTH_JWT_SECRET: "" }), /AUTH_JWT_SECRET/);
 });
 
+test("verifierConfigFromEnv canonicalizes the issuer and the audiences", () => {
+  const config = verifierConfigFromEnv({
+    AUTH_JWT_SECRET: SECRET,
+    AUTH_BASE_URL: "https://Auth.example.com/",
+    MCP_BASE_URL: "https://mcp.example.com/",
+  });
+  assert.equal(config.secret, SECRET);
+  assert.equal(config.issuer, "https://auth.example.com");
+  assert.deepEqual(config.audiences, AUDIENCES);
+});
+
 test("a fault that is not a jose error is logged and propagates instead of becoming a 401", async (t) => {
   const warn = t.mock.method(console, "warn", () => {});
   const error = t.mock.method(console, "error", () => {});

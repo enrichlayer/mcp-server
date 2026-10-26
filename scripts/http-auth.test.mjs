@@ -35,6 +35,22 @@ async function withServer(fn) {
   }
 }
 
+async function withEnv(overrides, fn) {
+  const previous = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, overrides);
+  try {
+    await fn();
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+}
+
 async function mint({ audience = "https://mcp.example.com/mcp", issuer = "https://auth.example.com" } = {}) {
   return new SignJWT({ api_key: "el_test_key", scope: "api" })
     .setProtectedHeader({ alg: "HS256" })
@@ -165,4 +181,19 @@ test("a token bound to the bare origin is accepted too", async () => {
     const response = await mcpPost(base, await mint({ audience: "https://mcp.example.com" }));
     assert.equal(response.status, 200);
   });
+});
+
+test("trailing slashes in MCP_BASE_URL and AUTH_BASE_URL break neither discovery nor the advertised issuer", async () => {
+  await withEnv({ MCP_BASE_URL: "https://mcp.example.com/", AUTH_BASE_URL: "https://auth.example.com/" }, () =>
+    withServer(async (base) => {
+      const challenge = (await mcpPost(base, undefined)).headers.get("www-authenticate");
+      assert.match(challenge, /resource_metadata="https:\/\/mcp\.example\.com\/\.well-known\/oauth-protected-resource\/mcp"/);
+
+      const metadata = await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json();
+      assert.equal(metadata.resource, "https://mcp.example.com/mcp");
+      // The issuer clients are sent to is the one tokens carry in `iss`.
+      assert.deepEqual(metadata.authorization_servers, ["https://auth.example.com"]);
+      assert.equal((await mcpPost(base, await mint())).status, 200);
+    }),
+  );
 });

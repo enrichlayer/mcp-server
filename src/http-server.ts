@@ -12,7 +12,11 @@ import {
   getApiKey,
   verifierConfigFromEnv,
 } from "./auth/verifier.js";
-import { MCP_PATH, resourceIdentifier } from "./auth/resource.js";
+import {
+  canonicalizeResource,
+  MCP_PATH,
+  resourceIdentifier,
+} from "./auth/resource.js";
 import {
   createMcpSentry,
   safeErrorForLog,
@@ -57,9 +61,13 @@ function isMalformedJson(error: unknown): boolean {
 export function createHttpApp(sentry: McpSentry): Express {
   // Configuration is read here, not at import, so a missing AUTH_JWT_SECRET or
   // a malformed URL is a startup failure that startHttpServer reports.
-  const verifyAccessToken = createVerifier(verifierConfigFromEnv());
-  const authBaseUrl = process.env.AUTH_BASE_URL || "http://localhost:3001";
-  const mcpBaseUrl = process.env.MCP_BASE_URL || "http://localhost:3000";
+  const verifierConfig = verifierConfigFromEnv();
+  const verifyAccessToken = createVerifier(verifierConfig);
+  // Canonical like the verifier's audiences, so a trailing slash in
+  // MCP_BASE_URL cannot break the challenge URL below.
+  const mcpBaseUrl = canonicalizeResource(
+    process.env.MCP_BASE_URL || "http://localhost:3000",
+  );
   // RFC 9728 §3.1: the path-suffixed document is the one clients try first when
   // the MCP endpoint has a path component, so the 401 challenge points there.
   const resourceMetadataUrl = `${mcpBaseUrl}${RESOURCE_METADATA_PATH}${MCP_PATH}`;
@@ -71,7 +79,9 @@ export function createHttpApp(sentry: McpSentry): Express {
     // What a user types into Claude — the canonical RFC 8707 identifier the
     // authorization server binds tokens to (see auth/resource.ts).
     resource: resourceIdentifier(mcpBaseUrl),
-    authorization_servers: [authBaseUrl],
+    // The canonical issuer the verifier requires in `iss`, so discovery cannot
+    // send clients to an issuer other than the one their tokens carry.
+    authorization_servers: [verifierConfig.issuer],
     scopes_supported: ["api"],
     bearer_methods_supported: ["header"],
     resource_name: "Enrich Layer MCP Server",
